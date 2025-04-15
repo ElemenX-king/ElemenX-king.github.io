@@ -2,7 +2,7 @@
 <search>
   <entry>
     <title>Hello World</title>
-    <url>/ElemenX-king/ElemenX-king.github.io.git/2025/04/13/demo/</url>
+    <url>/2025/04/13/demo/</url>
     <content><![CDATA[在UVM设计过程中遇到的问题Q1 uvm_driver后面的#(my_transaction)实际意义是什么my_transaction 是你自定义的事务类型，它通常是一个 UVM 中的 uvm_sequence_item 类型。通过将 my_transaction 作为模板参数传递给 uvm_driver，你告诉 UVM 系统，my_driver 会操作类型为 my_transaction 的对象。
 Q2 virtual 是什么意思virtual 关键字表明该接口 vif 是虚拟的，可以在继承类中重写或动态绑定。这意味着接口 vif 可以在不同的上下文中指向不同的对象。它让你可以在继承体系中选择特定的接口实现，而不仅仅是使用一个静态的接口对象。
 下面是几点注意的事项
