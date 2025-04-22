@@ -1,36 +1,59 @@
+var now = new Date();
+
+function createtime() {
+    now.setTime(now.getTime() + 1e3);
+    
+    var e = new Date("01/01/2025 00:00:00");
+    var t = Math.trunc(234e8 + (now - e) / 1e3 * 17);
+    var a = (t / 1496e5).toFixed(6);
+
+    var o = new Date("01/01/2025 00:00:00");
+    var n = (now - o) / 1e3 / 60 / 60 / 24;
+    var r = Math.floor(n);
+    
+    var i = (now - o) / 1e3 / 60 / 60 - 24 * r;
+    var s = Math.floor(i);
+    if (s == 1) {
+        s = "0" + s;
+    }
+
+    var d = (now - o) / 1e3 / 60 - 1440 * r - 60 * s;
+    var l = Math.floor(d);
+    if (l == 1) {
+        l = "0" + l;
+    }
+
+    var g = (now - o) / 1e3 - 86400 * r - 3600 * s - 60 * l;
+    var b = Math.round(g);
+    if (b == 1) {
+        b = "0" + b;
+    }
+
+    let c = "";
+
+    if (s < 18 && s >= 9) {
+        c = `<img class='boardsign' src='https://sourcebucket.s3.ladydaily.com/badge/F小屋-科研摸鱼中.svg' title='什么时候能够实现财富自由呀~'><br> 
+             <div style="font-size:13px;font-weight:bold">
+                 本站居然运行了 ${r} 天 ${s} 小时 ${l} 分 ${b} 秒 
+                 <i id="heartbeat" class='fas fa-heartbeat'></i> 
+                 <br> 
+                 旅行者 1 号当前距离地球 ${t} 千米，约为 ${a} 个天文单位 🚀
+             </div>`;
+    } else {
+        c = `<img class='boardsign' src='https://sourcebucket.s3.ladydaily.com/badge/F小屋-下班休息啦.svg' title='下班了就该开开心心地玩耍~'><br> 
+             <div style="font-size:13px;font-weight:bold">
+                 本站居然运行了 ${r} 天 ${s} 小时 ${l} 分 ${b} 秒 
+                 <i id="heartbeat" class='fas fa-heartbeat'></i> 
+                 <br> 
+                 旅行者 1 号当前距离地球 ${t} 千米，约为 ${a} 个天文单位 🚀
+             </div>`;
+    }
+
+    if (document.getElementById("workboard")) {
+        document.getElementById("workboard").innerHTML = c;
+    }
+}
+
 setInterval(() => {
-    let create_time = Math.round(new Date('2019-04-17 00:00:00').getTime() / 1000); //在此行修改建站时间
-    let timestamp = Math.round((new Date().getTime()) / 1000);
-    let second = timestamp - create_time;
-    let time = new Array(0, 0, 0, 0, 0);
-  
-    var nol = function(h){
-      return h>9?h:'0'+h;
-    }
-    if (second >= 365 * 24 * 3600) {
-      time[0] = parseInt(second / (365 * 24 * 3600));
-      second %= 365 * 24 * 3600;
-    }
-    if (second >= 24 * 3600) {
-      time[1] = parseInt(second / (24 * 3600));
-      second %= 24 * 3600;
-    }
-    if (second >= 3600) {
-      time[2] = nol(parseInt(second / 3600));
-      second %= 3600;
-    }
-    if (second >= 60) {
-      time[3] = nol(parseInt(second / 60));
-      second %= 60;
-    }
-    if (second > 0) {
-      time[4] = nol(second);
-    }
-    if ((Number(time[2])<22) && (Number(time[2])>7)){
-      currentTimeHtml ="<img class='boardsign' src='https://img.shields.io/badge/糖果屋-营业中-6adea8?style=social&logo=cakephp' title='距离百年老店也就差不到一百年~'><div id='runtime'>" + time[0] + ' YEAR ' + time[1] + ' DAYS ' + time[2] + ' : ' + time[3] + ' : ' + time[4] + '</div>';
-    }
-    else{
-      currentTimeHtml ="<img class='boardsign' src='https://img.shields.io/badge/糖果屋-打烊了-6adea8?style=social&logo=coffeescript' title='这个点了应该去睡觉啦，熬夜对身体不好哦'><div id='runtime'>" + time[0] + ' YEAR ' + time[1] + ' DAYS ' + time[2] + ' : ' + time[3] + ' : ' + time[4] + '</div>';
-    }
-    document.getElementById("workboard").innerHTML = currentTimeHtml;
-  }, 1000);
+    createtime();
+}, 1e3);
