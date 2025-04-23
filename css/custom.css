@@ -196,7 +196,7 @@
 
 /* 文章页 */
 div#post{
-  background: rgba(255, 247, 245, 0.75);
+  background: rgba(255, 250, 249, 0.75);
   backdrop-filter: var(--backdrop-filter);
   border: var(--border-style);
   border-radius: 20px;
@@ -205,7 +205,7 @@ div#post{
 /* 归档页、普通页面 */
 div#page,
 div#archive {
-  background: var(--trans-light);
+  background: rgba(125, 47, 32, 0.75);
   backdrop-filter: var(--backdrop-filter);
   border: var(--border-style);
   border-radius: 20px;
