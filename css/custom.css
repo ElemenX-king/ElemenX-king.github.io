@@ -257,11 +257,113 @@ div#archive {
   color: #ffffff;
 }
 
-.iconfont {
-  font-family: "iconfont" !important;
-  font-size: 3em;
-  /* 可以定义图标大小 */
-  font-style: normal;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/***********************加载条**************************/
+.pace {
+  -webkit-pointer-events: none;
+  pointer-events: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  z-index: 2000;
+  position: fixed;
+  margin: auto;
+  top: 4px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  border-radius: 8px;
+  width: 7rem;
+  background: #eaecf2;
+  border: 1px #e3e8f7;
+  overflow: hidden
+}
+
+.pace-inactive .pace-progress {
+  opacity: 0;
+  transition: .3s ease-in
+}
+
+.pace .pace-progress {
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -ms-box-sizing: border-box;
+  -o-box-sizing: border-box;
+  box-sizing: border-box;
+  -webkit-transform: translate3d(0, 0, 0);
+  -moz-transform: translate3d(0, 0, 0);
+  -ms-transform: translate3d(0, 0, 0);
+  -o-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  max-width: 200px;
+  position: absolute;
+  z-index: 2000;
+  display: block;
+  top: 0;
+  right: 100%;
+  height: 100%;
+  width: 100%;
+  /* linear-gradient(to right, #3494e6, #ec6ead) */
+  background: linear-gradient(to right, #ff9982, #4a2510);
+  animation: gradient 2s ease infinite;
+  background-size: 200%
+}
+
+.pace.pace-inactive {
+  opacity: 0;
+  transition: .3s;
+  top: -8px
+}
+
+/***********************哔哩哔哩视频适配**************************/
+/* .aspect-ratio {
+  position: relative;
+  width: 90%;
+  height: auto;
+  padding-bottom: 75%;
+  margin: 3% auto;
+  text-align: center;
+}
+.aspect-ratio iframe {
+  position: absolute;
+  width: 100%;
+  height: 86%;
+  left: 0;
+  top: 0;
+} */
+
+/* 
+直接复制插入你的 md 文章就行，修改里面的 aid 为你视频的 AV号
+{% raw %} // 防止渲染
+<div align=center class="aspect-ratio">
+    <iframe src="https://player.bilibili.com/player.html?aid=474023258&&page=1&as_wide=1&high_quality=1&danmaku=0" 
+    scrolling="no" 
+    border="0" 
+    frameborder="no" 
+    framespacing="0" 
+    high_quality=1
+    danmaku=1 
+    allowfullscreen="true"> 
+    </iframe>
+</div> 
+{% endraw %}
+*/
+
+/***********************宽屏自适应**************************/
+/* 全局宽度 */
+.layout {
+  max-width: 1400px;
+}
+
+/* 侧边卡片栏宽度 */
+.aside-content {
+  max-width: 318px;
+  min-width: 300px;
+}
+
+/* 平板尺寸自适应(不启用侧边栏宽度限制) */
+@media screen and (max-width: 900px) {
+  .aside-content {
+    max-width: none !important;
+    padding: 0 5px 0 5px;
+  }
 }

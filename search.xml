@@ -6,7 +6,6 @@
     <content><![CDATA[
 
 
-
 一、Driver驱动器这段代码是用 SystemVerilog 编写的一个基于 UVM（Universal Verification Methodology）的驱动器（driver）组件，名为 my_driver。它继承自 uvm_driver 类，用于在验证环境中驱动 DUT（Design Under Test，被测设计）的输入信号。下面我将逐步解释这段代码的结构和功能。
 1.1 整体结构代码分为两个主要部分：
 
