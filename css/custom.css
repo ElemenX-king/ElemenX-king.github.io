@@ -256,3 +256,12 @@ div#archive {
   background: rgba(25, 25, 25, 0.9) !important;
   color: #ffffff;
 }
+
+.iconfont {
+  font-family: "iconfont" !important;
+  font-size: 3em;
+  /* 可以定义图标大小 */
+  font-style: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
