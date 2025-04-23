@@ -199,6 +199,57 @@ class base_test extends uvm_test;   my_env         env;      function new(string
       </tags>
   </entry>
   <entry>
+    <title>【UVM学习笔记】UVM验证平台的运行—Phase以及objection</title>
+    <url>/2025/04/16/130da575206a/</url>
+    <content><![CDATA[
+
+
+一、phase机制1.1 task phase与function phaseUVM中的phase，按照其是否消耗仿真时间的特性，可以分成两大类,一类是function phase，如build_phase、connect_phase等，这些phase都不耗费仿真时间，通过函数来实现；另外一类是task phase，如run_phase等，它们耗费仿真时间，通过任务来实现。灰色背景所示的是task phase，其他为function phase。
+
+
+
+
+值得注意的是，task phase中，run_phase和pre_reset_phase等12个小的phase并行运行。后者称为动态运行的phase。分成小的phase是为了实现更加精细化的控制。reset、configure、main、shutdown四个phase是核心，这四个phase通常模拟DUT的正常工作方式，在reset_phase对DUT进行复位、初始化等操作，在configure_phase则进行DUT的配置，DUT的运行主要在main_phase完成，shutdown_phase则是做一些与DUT断电相关的操作。
+1.2 代码执行顺序对于UVM树来说，共有三种顺序可以选择，一是自上而下，二是自下而上，三是随机序。最后一种方式是不受人控制的，在编程当中，这种不受控制的代码越少越好。因此可以选择的无非就是自上而下或者自下而上。除了build_phase之外，所有不耗费仿真时间的phase(即function phase)都是自下而上执行的。对于同一层次的、具有兄弟关系的component，其执行顺序是按照字典序的。
+1.3 super.phase的内容对于build_phase来说，uvm_component对其做的最重要的事情就是自动获取通过config_db::set设置的参数。除build_phase外,在写其他phase时,完全可以不必加上super.xxxx_phase语句。
+1.4 phase的跳转phase的跳转是比较高级的功能，假如在验证平台中监测到reset_n信号为低电平,则马上从main_phase跳转到reset_phase。driver的代码如下:
+task my_driver::reset_phase(uvm_phase phase);   phase.raise_objection(this);    `uvm_info(&quot;driver&quot;, &quot;reset phase&quot;, UVM_LOW)   vif.data &lt;= 8&#x27;b0;   vif.valid &lt;= 1&#x27;b0;   while(!vif.rst_n)      @(posedge vif.clk);   phase.drop_objection(this); endtasktask my_driver::main_phase(uvm_phase phase);   `uvm_info(&quot;driver&quot;, &quot;main phase&quot;, UVM_LOW)   fork      while(1) begin         seq_item_port.get_next_item(req);         drive_one_pkt(req);         seq_item_port.item_done();      end      begin         @(negedge vif.rst_n);         phase.jump(uvm_reset_phase::get());      end   joinendtask
+reset_phase主要做一些清理工作,并等待复位完成。main_phase中一旦监测到reset_n为低电平,则马上跳转到reset_phase。
+二、objection机制objection字面的意思就是反对、异议。在验证平台中，可以通过drop_objection来通知系统可以关闭验证平台。当然，在撤销之前首先要raise_objection如果UVM发现此phase没有提起任何objection,那么将会直接跳转到下一个phase中。一般来说,在一个实际的验证平台中,通常会在以下两种objection的控制策略中选择一种:  
+2.1 在scoreboard中进行控制如果要在scoreboard中控制objection，则需要通过config_db::set的方式设置收集到的transaction的数量pkt_num，当收集到足够数量的transaction后跳出循环：
+task my_scoreboard::main_phase(uvm_phase phase); 	phase.raise_objection(this); 	fork 		while (1) begin 			exp_port.get(get_expect); 			expect_queue.push_back(get_expect); 		end 		for(int i = 0; i &lt; pkt_num; i++) begin 			act_port.get(get_actual); 			...  		end	join_any 	phase.drop_objection(this); endtask
+上述代码中将原本的fork…join语句改为了fork…join_any。当收集到足够的transaction后，第二个进程终结，从而跳出fork…join_any，执行drop_objection语句。
+2.1 在sequence中进行控制当sequence完成后,再撤销此objection。这里就是之前章节的例子：
+task my_case0::main_phase(uvm_phase phase);   phase.raise_objection(this);   `uvm_info(&quot;case0&quot;, &quot;main_phase&quot;, UVM_LOW)   #10000;   phase.drop_objection(this);endtask
+以上两种方式在验证平台中都有应用。其中用得最多的是第二种,这种方式是UVM提倡的方式。UVM的设计哲学就是全部  由sequence来控制激励的生成,因此一般情况下只在sequence中控制objection。但是有一个问题就是：在sequence中，n时刻发送完毕最后一个transaction，如果此时立刻drop_objection，那么最后在n+p时刻DUT输出的包将无法接收到。因此,在sequence中，最后一个包发送完毕后，要延时p时间才能drop_objection，对应的图如下所示：
+
+
+
+
+virtual task body(); 	if(starting_phase != null) 		starting_phase.raise_objection(this); 	repeat (10) begin 		`uvm_do(m_trans) 	end 	#100; 	if(starting_phase != null) 		starting_phase.drop_objection(this); endtask
+还有一种方法就是在最顶层运行下面的代码：
+phase.phase_done.set_drain_time(this, 200);
+这样在你撤销drop_objection后还会等待一段时间，提高了灵活性。
+二、domain机制在默认情况下，验证平台中所有component都位于一个名字为common_domain的domain中，假设有两个driver，那么两者在每一个phase的运行都是同步的。若要体现出独立性,那么两个部分的reset_phase、configure_phae、main_phase等就不应该同步。此时就应该让其中的一部分从common_domain中独立出来，使其位于不同的domain中。下面是两个在不同的domain的情况：
+
+
+
+
+domain把两块时钟域隔开，之后两个时钟域内的各个动态运行(run_time)的phase就可以不必同步。注意，这里domain只能隔离run-time的phase，对于其他phase，其实还是同步的。若将某个component置于某个新的domain中，可以使用如下的方式：
+class B extends uvm_component;   uvm_domain new_domain;   `uvm_component_utils(B)   function new(string name, uvm_component parent);      super.new(name, parent);      new_domain = new(&quot;new_domain&quot;);   endfunction   virtual function void connect_phase(uvm_phase phase);      set_domain(new_domain);   endfunction   extern virtual  task reset_phase(uvm_phase phase);   extern virtual  task post_reset_phase(uvm_phase phase);   extern virtual  task main_phase(uvm_phase phase);   extern virtual  task post_main_phase(uvm_phase phase);endclass
+这样B就是单独一个domain了，然后再运行的话会发现两者的运行时间发生了错位。刚才的A和B分别位于不同的domain中,在此种情况下,phase的跳转将只局限于某一个domain中。
+class B extends uvm_component;   uvm_domain new_domain;   bit has_jumped;   `uvm_component_utils(B)   function new(string name, uvm_component parent);      super.new(name, parent);      new_domain = new(&quot;new_domain&quot;);      has_jumped = 0;   endfunction   virtual function void connect_phase(uvm_phase phase);      set_domain(new_domain);   endfunction   extern virtual  task reset_phase(uvm_phase phase);   extern virtual  task main_phase(uvm_phase phase);endclasstask B::reset_phase(uvm_phase phase);   phase.raise_objection(this);   `uvm_info(&quot;B&quot;, &quot;enter into reset phase&quot;, UVM_LOW)   #100;   phase.drop_objection(this);endtasktask B::main_phase(uvm_phase phase);   phase.raise_objection(this);   `uvm_info(&quot;B&quot;, &quot;enter into main phase&quot;, UVM_LOW)   #500;   if(!has_jumped) begin      phase.jump(uvm_reset_phase::get());      has_jumped = 1&#x27;b1;   end   phase.drop_objection(this);endtask
+运行的结果是B两次进入了reset_phase和main_phase，而A只进入了一次。domain的应用使得phase的跳转可以只局限于验证平台的一部分。
+总结在这一章主要讲述了在UVM中每一个phase的运算顺序，有的是一瞬间运行，一个是需要消耗仿真时间，同时还在跳转、独立性等方面进行了讨论，能够帮助读者更加灵活的进行代码的编写。
+]]></content>
+      <categories>
+        <category>UVM学习笔记</category>
+      </categories>
+      <tags>
+        <tag>UVM</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>【UVM学习笔记】UVM中的“类”</title>
     <url>/2025/04/16/7fdd63537fc6/</url>
     <content><![CDATA[
@@ -363,57 +414,6 @@ FIFO中有两个IMP，但是在上面的连接关系中，FIFO中却是EXPORT，
 
 
 总结总结来说，这一章主要讲了数据在UVM中的传递方式，学习这一章可以更好的编写灵活性更高的UVM代码。
-]]></content>
-      <categories>
-        <category>UVM学习笔记</category>
-      </categories>
-      <tags>
-        <tag>UVM</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>【UVM学习笔记】UVM验证平台的运行—Phase以及objection</title>
-    <url>/2025/04/16/130da575206a/</url>
-    <content><![CDATA[
-
-
-一、phase机制1.1 task phase与function phaseUVM中的phase，按照其是否消耗仿真时间的特性，可以分成两大类,一类是function phase，如build_phase、connect_phase等，这些phase都不耗费仿真时间，通过函数来实现；另外一类是task phase，如run_phase等，它们耗费仿真时间，通过任务来实现。灰色背景所示的是task phase，其他为function phase。
-
-
-
-
-值得注意的是，task phase中，run_phase和pre_reset_phase等12个小的phase并行运行。后者称为动态运行的phase。分成小的phase是为了实现更加精细化的控制。reset、configure、main、shutdown四个phase是核心，这四个phase通常模拟DUT的正常工作方式，在reset_phase对DUT进行复位、初始化等操作，在configure_phase则进行DUT的配置，DUT的运行主要在main_phase完成，shutdown_phase则是做一些与DUT断电相关的操作。
-1.2 代码执行顺序对于UVM树来说，共有三种顺序可以选择，一是自上而下，二是自下而上，三是随机序。最后一种方式是不受人控制的，在编程当中，这种不受控制的代码越少越好。因此可以选择的无非就是自上而下或者自下而上。除了build_phase之外，所有不耗费仿真时间的phase(即function phase)都是自下而上执行的。对于同一层次的、具有兄弟关系的component，其执行顺序是按照字典序的。
-1.3 super.phase的内容对于build_phase来说，uvm_component对其做的最重要的事情就是自动获取通过config_db::set设置的参数。除build_phase外,在写其他phase时,完全可以不必加上super.xxxx_phase语句。
-1.4 phase的跳转phase的跳转是比较高级的功能，假如在验证平台中监测到reset_n信号为低电平,则马上从main_phase跳转到reset_phase。driver的代码如下:
-task my_driver::reset_phase(uvm_phase phase);   phase.raise_objection(this);    `uvm_info(&quot;driver&quot;, &quot;reset phase&quot;, UVM_LOW)   vif.data &lt;= 8&#x27;b0;   vif.valid &lt;= 1&#x27;b0;   while(!vif.rst_n)      @(posedge vif.clk);   phase.drop_objection(this); endtasktask my_driver::main_phase(uvm_phase phase);   `uvm_info(&quot;driver&quot;, &quot;main phase&quot;, UVM_LOW)   fork      while(1) begin         seq_item_port.get_next_item(req);         drive_one_pkt(req);         seq_item_port.item_done();      end      begin         @(negedge vif.rst_n);         phase.jump(uvm_reset_phase::get());      end   joinendtask
-reset_phase主要做一些清理工作,并等待复位完成。main_phase中一旦监测到reset_n为低电平,则马上跳转到reset_phase。
-二、objection机制objection字面的意思就是反对、异议。在验证平台中，可以通过drop_objection来通知系统可以关闭验证平台。当然，在撤销之前首先要raise_objection如果UVM发现此phase没有提起任何objection,那么将会直接跳转到下一个phase中。一般来说,在一个实际的验证平台中,通常会在以下两种objection的控制策略中选择一种:  
-2.1 在scoreboard中进行控制如果要在scoreboard中控制objection，则需要通过config_db::set的方式设置收集到的transaction的数量pkt_num，当收集到足够数量的transaction后跳出循环：
-task my_scoreboard::main_phase(uvm_phase phase); 	phase.raise_objection(this); 	fork 		while (1) begin 			exp_port.get(get_expect); 			expect_queue.push_back(get_expect); 		end 		for(int i = 0; i &lt; pkt_num; i++) begin 			act_port.get(get_actual); 			...  		end	join_any 	phase.drop_objection(this); endtask
-上述代码中将原本的fork…join语句改为了fork…join_any。当收集到足够的transaction后，第二个进程终结，从而跳出fork…join_any，执行drop_objection语句。
-2.1 在sequence中进行控制当sequence完成后,再撤销此objection。这里就是之前章节的例子：
-task my_case0::main_phase(uvm_phase phase);   phase.raise_objection(this);   `uvm_info(&quot;case0&quot;, &quot;main_phase&quot;, UVM_LOW)   #10000;   phase.drop_objection(this);endtask
-以上两种方式在验证平台中都有应用。其中用得最多的是第二种,这种方式是UVM提倡的方式。UVM的设计哲学就是全部  由sequence来控制激励的生成,因此一般情况下只在sequence中控制objection。但是有一个问题就是：在sequence中，n时刻发送完毕最后一个transaction，如果此时立刻drop_objection，那么最后在n+p时刻DUT输出的包将无法接收到。因此,在sequence中，最后一个包发送完毕后，要延时p时间才能drop_objection，对应的图如下所示：
-
-
-
-
-virtual task body(); 	if(starting_phase != null) 		starting_phase.raise_objection(this); 	repeat (10) begin 		`uvm_do(m_trans) 	end 	#100; 	if(starting_phase != null) 		starting_phase.drop_objection(this); endtask
-还有一种方法就是在最顶层运行下面的代码：
-phase.phase_done.set_drain_time(this, 200);
-这样在你撤销drop_objection后还会等待一段时间，提高了灵活性。
-二、domain机制在默认情况下，验证平台中所有component都位于一个名字为common_domain的domain中，假设有两个driver，那么两者在每一个phase的运行都是同步的。若要体现出独立性,那么两个部分的reset_phase、configure_phae、main_phase等就不应该同步。此时就应该让其中的一部分从common_domain中独立出来，使其位于不同的domain中。下面是两个在不同的domain的情况：
-
-
-
-
-domain把两块时钟域隔开，之后两个时钟域内的各个动态运行(run_time)的phase就可以不必同步。注意，这里domain只能隔离run-time的phase，对于其他phase，其实还是同步的。若将某个component置于某个新的domain中，可以使用如下的方式：
-class B extends uvm_component;   uvm_domain new_domain;   `uvm_component_utils(B)   function new(string name, uvm_component parent);      super.new(name, parent);      new_domain = new(&quot;new_domain&quot;);   endfunction   virtual function void connect_phase(uvm_phase phase);      set_domain(new_domain);   endfunction   extern virtual  task reset_phase(uvm_phase phase);   extern virtual  task post_reset_phase(uvm_phase phase);   extern virtual  task main_phase(uvm_phase phase);   extern virtual  task post_main_phase(uvm_phase phase);endclass
-这样B就是单独一个domain了，然后再运行的话会发现两者的运行时间发生了错位。刚才的A和B分别位于不同的domain中,在此种情况下,phase的跳转将只局限于某一个domain中。
-class B extends uvm_component;   uvm_domain new_domain;   bit has_jumped;   `uvm_component_utils(B)   function new(string name, uvm_component parent);      super.new(name, parent);      new_domain = new(&quot;new_domain&quot;);      has_jumped = 0;   endfunction   virtual function void connect_phase(uvm_phase phase);      set_domain(new_domain);   endfunction   extern virtual  task reset_phase(uvm_phase phase);   extern virtual  task main_phase(uvm_phase phase);endclasstask B::reset_phase(uvm_phase phase);   phase.raise_objection(this);   `uvm_info(&quot;B&quot;, &quot;enter into reset phase&quot;, UVM_LOW)   #100;   phase.drop_objection(this);endtasktask B::main_phase(uvm_phase phase);   phase.raise_objection(this);   `uvm_info(&quot;B&quot;, &quot;enter into main phase&quot;, UVM_LOW)   #500;   if(!has_jumped) begin      phase.jump(uvm_reset_phase::get());      has_jumped = 1&#x27;b1;   end   phase.drop_objection(this);endtask
-运行的结果是B两次进入了reset_phase和main_phase，而A只进入了一次。domain的应用使得phase的跳转可以只局限于验证平台的一部分。
-总结在这一章主要讲述了在UVM中每一个phase的运算顺序，有的是一瞬间运行，一个是需要消耗仿真时间，同时还在跳转、独立性等方面进行了讨论，能够帮助读者更加灵活的进行代码的编写。
 ]]></content>
       <categories>
         <category>UVM学习笔记</category>
