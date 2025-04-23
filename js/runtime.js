@@ -3,11 +3,11 @@ var now = new Date();
 function createtime() {
     now.setTime(now.getTime() + 1e3);
     
-    var e = new Date("04/04/2025 00:00:00");
+    var e = new Date("16/04/2025 00:00:00");
     var t = Math.trunc(234e8 + (now - e) / 1e3 * 17);
     var a = (t / 1496e5).toFixed(6);
 
-    var o = new Date("04/04/2025 00:00:00");
+    var o = new Date("16/04/2025 00:00:00");
     var n = (now - o) / 1e3 / 60 / 60 / 24;
     var r = Math.floor(n);
     
