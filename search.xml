@@ -1,6 +1,74 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>【UVM学习笔记】UVM中的“类”</title>
+    <url>/2025/04/16/7fdd63537fc6/</url>
+    <content><![CDATA[
+
+
+一、UVM派生结构在上一篇博客讲述了UVM的结构，大家可以发现所有的结构分为两大类，一个是uvm_component，另一个是uvm_object。uvm_object是UVM中最基本的类,读者能想到的几乎所有的类都继承自uvm_object，包括uvm_component。uvm_component有两大特性是uvm_object所没有的，一是通过在new的时候指定parent参数来形成一种树形的组织结构，二是有phase的自动执行特点。下面是整个UVM类的派生图：
+
+
+
+
+1.1 来自uvm_object的类既然uvm_object是最基本的类,那么其能力恰恰也是最差的,当然了,其扩展性也是最好的。下面这几个是派生与其的类：
+
+uvm_sequence_item：之前定义的所有的transaction要从uvm_sequence_item派生。在UVM中，不能从uvm_transaction派生一个transaction，而要从uvm_sequence_item派生。因为uvm_sequence_item是从uvm_transaction派生而来的，因此uvm_sequence_item相比uvm_transaction添加了很多实用的成员变量和函数&#x2F;任务。
+uvm_sequence：所有的sequence要从uvm_sequence派生。sequence就是sequence_item的组合。
+config：所有的config一般直接从uvm_object派生。config的主要功能就是规范验证平台的行为方式。如规定driver在读取总线时  地址信号要持续几个时钟,片选信号从什么时候开始有效等。但是不要和前面的uvm_config_db搞混了
+
+除了这些，还有一些没有见过的：
+
+uvm_reg_item派生自uvm_sequence_item,用于register model中。
+uvm_reg_map、uvm_mem、uvm_reg_field、uvm_reg、uvm_reg_file、uvm_reg_block等与寄存器相关的众多的类都是派生自uvm_object，它们都是用于register model。
+uvm_phase派生自uvm_object，其主要作用为控制uvm_component的行为方式,使得uvm_component平滑地在各个不同的phase之间依次运转。
+
+1.2 来自uvm_component的类这个就是上一篇博客中树的各个部分了。
+
+uvm_driver：所有的driver都要派生自uvm_driver。driver的功能主要就是向sequencer索要sequence_item，并且将sequence_item里的信息驱动到DUT的端口上。下面是其成员变量：
+
+uvm_seq_item_pull_port #(REQ, RSP) seq_item_port; uvm_seq_item_pull_port #(REQ, RSP) seq_item_prod_if; // alias uvm_analysis_port #(RSP) rsp_port; REQ req; RSP rsp;
+
+uvm_monitor：所有的monitor都要派生自uvm_monitor。monitor做的事情与driver相反，driver向DUT的pin上发送数据，而monitor则是从DUT的pin上接收数据，并且把接收到的数据转换成transaction级别的sequence_item，再把转换后的数据发送给scoreboard。
+uvm_sequencer：所有的sequencer都要派生自uvm_sequencer。sequencer的功能就是组织管理sequence，当driver要求数据时,  它就把sequence生成的sequence_item转发给driver。
+uvm_scoreboard：一般的scoreboard都要派生自uvm_scoreboard。scoreboard的功能就是比较reference model和monitor分别发送来的数据,根据比较结果判断DUT是否正确工作。
+reference model：UVM中并没有针对reference model定义一个类。所以通常来说，reference model都是直接派生自uvm_component。reference model的作用就是模仿DUT，完成与DUT相同的功能。
+uvm_agent：所有的agent要派生自uvm_agent。与前面几个比起来，uvm_agent的作用并不是那么明显。它只是把driver和monitor封装在一起，根据参数值来决定是只实例化monitor还是要同时实例化driver和monitor。
+uvm_env：所有的env(environment的缩写)要派生自uvm_env。env将验证平台上用到的固定不变的component都封装在一起。
+uvm_test：所有的测试用例要派生自uvm_test或其派生类，不同的测试用例之间差异很大，所以从uvm_test派生出来的类各不相同。
+
+二、UVM中打印信息的控制2.1 冗余度UVM通过冗余度级别的设置提高了仿真日志的可读性。在打印信息之前，UVM会比较要显示信息的冗余度级别与默认的冗余度阈值，如果小于等于阈值，就会显示，否则不会显示。默认的冗余度阈值是UVM_MEDIUM，所有低于等于UVM_MEDIUM(如UVM_LOW)的信息都会被打印出来。
+2.2 重载重载是深入到UVM骨子里的一个特性。UVM默认有四种信息严重性:UVM_INFO、UVM_WARNING、UVM_ERROR、  UVM_FATAL。这四种严重性可以互相重载。
+2.3 UVM_ERROR到达一定数量结束仿真当uvm_fatal出现时,表示出现了致命错误,仿真会马上停止。UVM同样支持UVM_ERROR达到一定数量时结束仿真。这个功能非常有用。实现这个功能的是set_report_max_quit_count函数：
+function void base_test::build_phase(uvm_phase phase);   super.build_phase(phase);   env  =  my_env::type_id::create(&quot;env&quot;, this);    set_report_max_quit_count(5);endfunction
+2.4 UVM的断点功能在程序调试时，断点功能是非常有用的一个功能。在程序运行时，预先在某语句处设置一断点。当程序执行到此处时，停止仿真，进入交互模式，从而进行调试。断点功能需要从仿真器的角度进行设置，不同仿真器的设置方式不同。为了消除这些设置方式的不同，UVM支持内建的断点功能，当执行到断点时，自动停止仿真，进入交互模式：
+env.i_agt.drv.set_report_severity_action(UVM_WARNING, UVM_DISPLAY| UVM_STOP);
+2.5 将输出信息导入文件中UVM会将UVM_INFO等信息显示在标准输出(终端屏幕)上。各个仿真器提供将显示在标准输出的信息同时输出到一个日志文件中的功能。
+virtual function void connect_phase(uvm_phase phase);    driver_log = $fopen(&quot;driver.log&quot;, &quot;w&quot;);    drv_log = $fopen(&quot;drv.log&quot;, &quot;w&quot;);    env.i_agt.drv.set_report_severity_id_file(UVM_WARNING, &quot;my_driver&quot;, driver_log);    env.i_agt.drv.set_report_severity_id_file(UVM_INFO, &quot;my_drv&quot;, drv_log);    env.i_agt.drv.set_report_id_action(&quot;my_driver&quot;, UVM_DISPLAY| UVM_LOG);    env.i_agt.drv.set_report_id_action(&quot;my_drv&quot;, UVM_DISPLAY| UVM_LOG);endfunction
+上述代码将env.i_agt.drv的UVM_INFO输出到info.log，UVM_WARNING输出到warning.log，UVM_ERROR输出到error.log，  UVM_FATAL输出到fatal.log。
+2.5 控制打印信息的行为有很多宏定义：
+typedef enum &#123;  	 UVM_NO_ACTION = &#x27;b000000,	 UVM_DISPLAY = &#x27;b000001, 	 UVM_LOG = &#x27;b000010, 	 UVM_COUNT = &#x27;b000100, 	 UVM_EXIT = &#x27;b001000, 	 UVM_CALL_HOOK = &#x27;b010000, 	 UVM_STOP = &#x27;b100000  &#125; uvm_action_type;
+其中UVM_NO_ACTION是不做任何操作;UVM_DISPLAY是输出到标准输出上;UVM_LOG是输出到日志文件中,它能工作  的前提是设置好了日志文件;UVM_COUNT是作为计数目标;UVM_EXIT是直接退出仿真;UVM_CALL_HOOK是调用一个回调  函数;UVM_STOP是停止仿真,进入命令行交互模式。
+三、config_db机制路径和层次结构是两个不同的概念，如果你使用了下面的代码：
+drv = my_driver::type_id::create(&quot;driver&quot;);
+这样的话，那么drv在my_casen看来，层次结构依然是env.i_agt.drv，但其路径变为了env.i_agt.driver。在好的编码习惯中，这种变量名与 其实例化时传递的名字不一致的情况应该尽量避免。
+3.1 set与get函数的参数config_db机制用于在UVM验证平台间传递参数。set函数是寄信，而get函数是收信。代码如下：
+uvm_config_db#(int)::set(this, &quot;env.i_agt.drv&quot;, &quot;pre_num&quot;, 100);
+其中第一个和第二个参数联合起来组成目标路径，与此路径符合的目标才能收信。第一个参数必须是一个uvm_component实例的指针，第二个参数是相对此实例的路径。第三个参数表示一个记号，用以说明这个值是传给目标中的哪个成员的，第四个参数是要设置的值。在driver中的build_phase使用如下方式收信：
+uvm_config_db#(int)::get(this, &quot;&quot;, &quot;pre_num&quot;, pre_num);
+get函数中的第一个参数和第二个参数联合起来组成路径。
+3.2 跨层次的多重设置假如uvm_test_top和env中都对driver的pre_num的值进行了设置，获得的数值还是uvm_test_top，UVM规定层次越高,那么它的优先级越高。这里的层次指的是在UVM  树中的位置,越靠近根结点uvm_top,则认为其层次越高。当跨层次来看待问题时，是高层次的set设置优先；当处于同一层次时，上节已经提过，是时间优先。
+3.3 非直线的设置与获取若在其他component，如scoreboard中，对driver的某些变量使用config_db机制进行设置,则称为非直线的设置，我们应该尽量避免这种方式。
+总结本次描述了在上一节定义的众多组件的详细介绍，能够让我们更加深刻的了解UVM各组件之间的协调运转。
+]]></content>
+      <categories>
+        <category>UVM学习笔记</category>
+      </categories>
+      <tags>
+        <tag>UVM</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>【UVM学习笔记】UVM基础—一文告诉你UVM的组成部分</title>
     <url>/2025/04/16/675312ec1441/</url>
     <content><![CDATA[
@@ -199,125 +267,6 @@ class base_test extends uvm_test;   my_env         env;      function new(string
       </tags>
   </entry>
   <entry>
-    <title>【UVM学习笔记】UVM中的“类”</title>
-    <url>/2025/04/16/7fdd63537fc6/</url>
-    <content><![CDATA[
-
-
-一、UVM派生结构在上一篇博客讲述了UVM的结构，大家可以发现所有的结构分为两大类，一个是uvm_component，另一个是uvm_object。uvm_object是UVM中最基本的类,读者能想到的几乎所有的类都继承自uvm_object，包括uvm_component。uvm_component有两大特性是uvm_object所没有的，一是通过在new的时候指定parent参数来形成一种树形的组织结构，二是有phase的自动执行特点。下面是整个UVM类的派生图：
-
-
-
-
-1.1 来自uvm_object的类既然uvm_object是最基本的类,那么其能力恰恰也是最差的,当然了,其扩展性也是最好的。下面这几个是派生与其的类：
-
-uvm_sequence_item：之前定义的所有的transaction要从uvm_sequence_item派生。在UVM中，不能从uvm_transaction派生一个transaction，而要从uvm_sequence_item派生。因为uvm_sequence_item是从uvm_transaction派生而来的，因此uvm_sequence_item相比uvm_transaction添加了很多实用的成员变量和函数&#x2F;任务。
-uvm_sequence：所有的sequence要从uvm_sequence派生。sequence就是sequence_item的组合。
-config：所有的config一般直接从uvm_object派生。config的主要功能就是规范验证平台的行为方式。如规定driver在读取总线时  地址信号要持续几个时钟,片选信号从什么时候开始有效等。但是不要和前面的uvm_config_db搞混了
-
-除了这些，还有一些没有见过的：
-
-uvm_reg_item派生自uvm_sequence_item,用于register model中。
-uvm_reg_map、uvm_mem、uvm_reg_field、uvm_reg、uvm_reg_file、uvm_reg_block等与寄存器相关的众多的类都是派生自uvm_object，它们都是用于register model。
-uvm_phase派生自uvm_object，其主要作用为控制uvm_component的行为方式,使得uvm_component平滑地在各个不同的phase之间依次运转。
-
-1.2 来自uvm_component的类这个就是上一篇博客中树的各个部分了。
-
-uvm_driver：所有的driver都要派生自uvm_driver。driver的功能主要就是向sequencer索要sequence_item，并且将sequence_item里的信息驱动到DUT的端口上。下面是其成员变量：
-
-uvm_seq_item_pull_port #(REQ, RSP) seq_item_port; uvm_seq_item_pull_port #(REQ, RSP) seq_item_prod_if; // alias uvm_analysis_port #(RSP) rsp_port; REQ req; RSP rsp;
-
-uvm_monitor：所有的monitor都要派生自uvm_monitor。monitor做的事情与driver相反，driver向DUT的pin上发送数据，而monitor则是从DUT的pin上接收数据，并且把接收到的数据转换成transaction级别的sequence_item，再把转换后的数据发送给scoreboard。
-uvm_sequencer：所有的sequencer都要派生自uvm_sequencer。sequencer的功能就是组织管理sequence，当driver要求数据时,  它就把sequence生成的sequence_item转发给driver。
-uvm_scoreboard：一般的scoreboard都要派生自uvm_scoreboard。scoreboard的功能就是比较reference model和monitor分别发送来的数据,根据比较结果判断DUT是否正确工作。
-reference model：UVM中并没有针对reference model定义一个类。所以通常来说，reference model都是直接派生自uvm_component。reference model的作用就是模仿DUT，完成与DUT相同的功能。
-uvm_agent：所有的agent要派生自uvm_agent。与前面几个比起来，uvm_agent的作用并不是那么明显。它只是把driver和monitor封装在一起，根据参数值来决定是只实例化monitor还是要同时实例化driver和monitor。
-uvm_env：所有的env(environment的缩写)要派生自uvm_env。env将验证平台上用到的固定不变的component都封装在一起。
-uvm_test：所有的测试用例要派生自uvm_test或其派生类，不同的测试用例之间差异很大，所以从uvm_test派生出来的类各不相同。
-
-二、UVM中打印信息的控制2.1 冗余度UVM通过冗余度级别的设置提高了仿真日志的可读性。在打印信息之前，UVM会比较要显示信息的冗余度级别与默认的冗余度阈值，如果小于等于阈值，就会显示，否则不会显示。默认的冗余度阈值是UVM_MEDIUM，所有低于等于UVM_MEDIUM(如UVM_LOW)的信息都会被打印出来。
-2.2 重载重载是深入到UVM骨子里的一个特性。UVM默认有四种信息严重性:UVM_INFO、UVM_WARNING、UVM_ERROR、  UVM_FATAL。这四种严重性可以互相重载。
-2.3 UVM_ERROR到达一定数量结束仿真当uvm_fatal出现时,表示出现了致命错误,仿真会马上停止。UVM同样支持UVM_ERROR达到一定数量时结束仿真。这个功能非常有用。实现这个功能的是set_report_max_quit_count函数：
-function void base_test::build_phase(uvm_phase phase);   super.build_phase(phase);   env  =  my_env::type_id::create(&quot;env&quot;, this);    set_report_max_quit_count(5);endfunction
-2.4 UVM的断点功能在程序调试时，断点功能是非常有用的一个功能。在程序运行时，预先在某语句处设置一断点。当程序执行到此处时，停止仿真，进入交互模式，从而进行调试。断点功能需要从仿真器的角度进行设置，不同仿真器的设置方式不同。为了消除这些设置方式的不同，UVM支持内建的断点功能，当执行到断点时，自动停止仿真，进入交互模式：
-env.i_agt.drv.set_report_severity_action(UVM_WARNING, UVM_DISPLAY| UVM_STOP);
-2.5 将输出信息导入文件中UVM会将UVM_INFO等信息显示在标准输出(终端屏幕)上。各个仿真器提供将显示在标准输出的信息同时输出到一个日志文件中的功能。
-virtual function void connect_phase(uvm_phase phase);    driver_log = $fopen(&quot;driver.log&quot;, &quot;w&quot;);    drv_log = $fopen(&quot;drv.log&quot;, &quot;w&quot;);    env.i_agt.drv.set_report_severity_id_file(UVM_WARNING, &quot;my_driver&quot;, driver_log);    env.i_agt.drv.set_report_severity_id_file(UVM_INFO, &quot;my_drv&quot;, drv_log);    env.i_agt.drv.set_report_id_action(&quot;my_driver&quot;, UVM_DISPLAY| UVM_LOG);    env.i_agt.drv.set_report_id_action(&quot;my_drv&quot;, UVM_DISPLAY| UVM_LOG);endfunction
-上述代码将env.i_agt.drv的UVM_INFO输出到info.log，UVM_WARNING输出到warning.log，UVM_ERROR输出到error.log，  UVM_FATAL输出到fatal.log。
-2.5 控制打印信息的行为有很多宏定义：
-typedef enum &#123;  	 UVM_NO_ACTION = &#x27;b000000,	 UVM_DISPLAY = &#x27;b000001, 	 UVM_LOG = &#x27;b000010, 	 UVM_COUNT = &#x27;b000100, 	 UVM_EXIT = &#x27;b001000, 	 UVM_CALL_HOOK = &#x27;b010000, 	 UVM_STOP = &#x27;b100000  &#125; uvm_action_type;
-其中UVM_NO_ACTION是不做任何操作;UVM_DISPLAY是输出到标准输出上;UVM_LOG是输出到日志文件中,它能工作  的前提是设置好了日志文件;UVM_COUNT是作为计数目标;UVM_EXIT是直接退出仿真;UVM_CALL_HOOK是调用一个回调  函数;UVM_STOP是停止仿真,进入命令行交互模式。
-三、config_db机制路径和层次结构是两个不同的概念，如果你使用了下面的代码：
-drv = my_driver::type_id::create(&quot;driver&quot;);
-这样的话，那么drv在my_casen看来，层次结构依然是env.i_agt.drv，但其路径变为了env.i_agt.driver。在好的编码习惯中，这种变量名与 其实例化时传递的名字不一致的情况应该尽量避免。
-3.1 set与get函数的参数config_db机制用于在UVM验证平台间传递参数。set函数是寄信，而get函数是收信。代码如下：
-uvm_config_db#(int)::set(this, &quot;env.i_agt.drv&quot;, &quot;pre_num&quot;, 100);
-其中第一个和第二个参数联合起来组成目标路径，与此路径符合的目标才能收信。第一个参数必须是一个uvm_component实例的指针，第二个参数是相对此实例的路径。第三个参数表示一个记号，用以说明这个值是传给目标中的哪个成员的，第四个参数是要设置的值。在driver中的build_phase使用如下方式收信：
-uvm_config_db#(int)::get(this, &quot;&quot;, &quot;pre_num&quot;, pre_num);
-get函数中的第一个参数和第二个参数联合起来组成路径。
-3.2 跨层次的多重设置假如uvm_test_top和env中都对driver的pre_num的值进行了设置，获得的数值还是uvm_test_top，UVM规定层次越高,那么它的优先级越高。这里的层次指的是在UVM  树中的位置,越靠近根结点uvm_top,则认为其层次越高。当跨层次来看待问题时，是高层次的set设置优先；当处于同一层次时，上节已经提过，是时间优先。
-3.3 非直线的设置与获取若在其他component，如scoreboard中，对driver的某些变量使用config_db机制进行设置,则称为非直线的设置，我们应该尽量避免这种方式。
-总结本次描述了在上一节定义的众多组件的详细介绍，能够让我们更加深刻的了解UVM各组件之间的协调运转。
-]]></content>
-      <categories>
-        <category>UVM学习笔记</category>
-      </categories>
-      <tags>
-        <tag>UVM</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>【UVM学习笔记】UVM验证平台的运行—Phase以及objection</title>
-    <url>/2025/04/16/130da575206a/</url>
-    <content><![CDATA[
-
-
-一、phase机制1.1 task phase与function phaseUVM中的phase，按照其是否消耗仿真时间的特性，可以分成两大类,一类是function phase，如build_phase、connect_phase等，这些phase都不耗费仿真时间，通过函数来实现；另外一类是task phase，如run_phase等，它们耗费仿真时间，通过任务来实现。灰色背景所示的是task phase，其他为function phase。
-
-
-
-
-值得注意的是，task phase中，run_phase和pre_reset_phase等12个小的phase并行运行。后者称为动态运行的phase。分成小的phase是为了实现更加精细化的控制。reset、configure、main、shutdown四个phase是核心，这四个phase通常模拟DUT的正常工作方式，在reset_phase对DUT进行复位、初始化等操作，在configure_phase则进行DUT的配置，DUT的运行主要在main_phase完成，shutdown_phase则是做一些与DUT断电相关的操作。
-1.2 代码执行顺序对于UVM树来说，共有三种顺序可以选择，一是自上而下，二是自下而上，三是随机序。最后一种方式是不受人控制的，在编程当中，这种不受控制的代码越少越好。因此可以选择的无非就是自上而下或者自下而上。除了build_phase之外，所有不耗费仿真时间的phase(即function phase)都是自下而上执行的。对于同一层次的、具有兄弟关系的component，其执行顺序是按照字典序的。
-1.3 super.phase的内容对于build_phase来说，uvm_component对其做的最重要的事情就是自动获取通过config_db::set设置的参数。除build_phase外,在写其他phase时,完全可以不必加上super.xxxx_phase语句。
-1.4 phase的跳转phase的跳转是比较高级的功能，假如在验证平台中监测到reset_n信号为低电平,则马上从main_phase跳转到reset_phase。driver的代码如下:
-task my_driver::reset_phase(uvm_phase phase);   phase.raise_objection(this);    `uvm_info(&quot;driver&quot;, &quot;reset phase&quot;, UVM_LOW)   vif.data &lt;= 8&#x27;b0;   vif.valid &lt;= 1&#x27;b0;   while(!vif.rst_n)      @(posedge vif.clk);   phase.drop_objection(this); endtasktask my_driver::main_phase(uvm_phase phase);   `uvm_info(&quot;driver&quot;, &quot;main phase&quot;, UVM_LOW)   fork      while(1) begin         seq_item_port.get_next_item(req);         drive_one_pkt(req);         seq_item_port.item_done();      end      begin         @(negedge vif.rst_n);         phase.jump(uvm_reset_phase::get());      end   joinendtask
-reset_phase主要做一些清理工作,并等待复位完成。main_phase中一旦监测到reset_n为低电平,则马上跳转到reset_phase。
-二、objection机制objection字面的意思就是反对、异议。在验证平台中，可以通过drop_objection来通知系统可以关闭验证平台。当然，在撤销之前首先要raise_objection如果UVM发现此phase没有提起任何objection,那么将会直接跳转到下一个phase中。一般来说,在一个实际的验证平台中,通常会在以下两种objection的控制策略中选择一种:  
-2.1 在scoreboard中进行控制如果要在scoreboard中控制objection，则需要通过config_db::set的方式设置收集到的transaction的数量pkt_num，当收集到足够数量的transaction后跳出循环：
-task my_scoreboard::main_phase(uvm_phase phase); 	phase.raise_objection(this); 	fork 		while (1) begin 			exp_port.get(get_expect); 			expect_queue.push_back(get_expect); 		end 		for(int i = 0; i &lt; pkt_num; i++) begin 			act_port.get(get_actual); 			...  		end	join_any 	phase.drop_objection(this); endtask
-上述代码中将原本的fork…join语句改为了fork…join_any。当收集到足够的transaction后，第二个进程终结，从而跳出fork…join_any，执行drop_objection语句。
-2.1 在sequence中进行控制当sequence完成后,再撤销此objection。这里就是之前章节的例子：
-task my_case0::main_phase(uvm_phase phase);   phase.raise_objection(this);   `uvm_info(&quot;case0&quot;, &quot;main_phase&quot;, UVM_LOW)   #10000;   phase.drop_objection(this);endtask
-以上两种方式在验证平台中都有应用。其中用得最多的是第二种,这种方式是UVM提倡的方式。UVM的设计哲学就是全部  由sequence来控制激励的生成,因此一般情况下只在sequence中控制objection。但是有一个问题就是：在sequence中，n时刻发送完毕最后一个transaction，如果此时立刻drop_objection，那么最后在n+p时刻DUT输出的包将无法接收到。因此,在sequence中，最后一个包发送完毕后，要延时p时间才能drop_objection，对应的图如下所示：
-
-
-
-
-virtual task body(); 	if(starting_phase != null) 		starting_phase.raise_objection(this); 	repeat (10) begin 		`uvm_do(m_trans) 	end 	#100; 	if(starting_phase != null) 		starting_phase.drop_objection(this); endtask
-还有一种方法就是在最顶层运行下面的代码：
-phase.phase_done.set_drain_time(this, 200);
-这样在你撤销drop_objection后还会等待一段时间，提高了灵活性。
-二、domain机制在默认情况下，验证平台中所有component都位于一个名字为common_domain的domain中，假设有两个driver，那么两者在每一个phase的运行都是同步的。若要体现出独立性,那么两个部分的reset_phase、configure_phae、main_phase等就不应该同步。此时就应该让其中的一部分从common_domain中独立出来，使其位于不同的domain中。下面是两个在不同的domain的情况：
-
-
-
-
-domain把两块时钟域隔开，之后两个时钟域内的各个动态运行(run_time)的phase就可以不必同步。注意，这里domain只能隔离run-time的phase，对于其他phase，其实还是同步的。若将某个component置于某个新的domain中，可以使用如下的方式：
-class B extends uvm_component;   uvm_domain new_domain;   `uvm_component_utils(B)   function new(string name, uvm_component parent);      super.new(name, parent);      new_domain = new(&quot;new_domain&quot;);   endfunction   virtual function void connect_phase(uvm_phase phase);      set_domain(new_domain);   endfunction   extern virtual  task reset_phase(uvm_phase phase);   extern virtual  task post_reset_phase(uvm_phase phase);   extern virtual  task main_phase(uvm_phase phase);   extern virtual  task post_main_phase(uvm_phase phase);endclass
-这样B就是单独一个domain了，然后再运行的话会发现两者的运行时间发生了错位。刚才的A和B分别位于不同的domain中,在此种情况下,phase的跳转将只局限于某一个domain中。
-class B extends uvm_component;   uvm_domain new_domain;   bit has_jumped;   `uvm_component_utils(B)   function new(string name, uvm_component parent);      super.new(name, parent);      new_domain = new(&quot;new_domain&quot;);      has_jumped = 0;   endfunction   virtual function void connect_phase(uvm_phase phase);      set_domain(new_domain);   endfunction   extern virtual  task reset_phase(uvm_phase phase);   extern virtual  task main_phase(uvm_phase phase);endclasstask B::reset_phase(uvm_phase phase);   phase.raise_objection(this);   `uvm_info(&quot;B&quot;, &quot;enter into reset phase&quot;, UVM_LOW)   #100;   phase.drop_objection(this);endtasktask B::main_phase(uvm_phase phase);   phase.raise_objection(this);   `uvm_info(&quot;B&quot;, &quot;enter into main phase&quot;, UVM_LOW)   #500;   if(!has_jumped) begin      phase.jump(uvm_reset_phase::get());      has_jumped = 1&#x27;b1;   end   phase.drop_objection(this);endtask
-运行的结果是B两次进入了reset_phase和main_phase，而A只进入了一次。domain的应用使得phase的跳转可以只局限于验证平台的一部分。
-总结在这一章主要讲述了在UVM中每一个phase的运算顺序，有的是一瞬间运行，一个是需要消耗仿真时间，同时还在跳转、独立性等方面进行了讨论，能够帮助读者更加灵活的进行代码的编写。
-]]></content>
-      <categories>
-        <category>UVM学习笔记</category>
-      </categories>
-      <tags>
-        <tag>UVM</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>【UVM学习笔记】更加灵活的UVM—通信</title>
     <url>/2025/04/16/e224389c0e0d/</url>
     <content><![CDATA[
@@ -420,6 +369,186 @@ FIFO中有两个IMP，但是在上面的连接关系中，FIFO中却是EXPORT，
       </categories>
       <tags>
         <tag>UVM</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>【UVM学习笔记】UVM验证平台的运行—Phase以及objection</title>
+    <url>/2025/04/16/130da575206a/</url>
+    <content><![CDATA[
+
+
+一、phase机制1.1 task phase与function phaseUVM中的phase，按照其是否消耗仿真时间的特性，可以分成两大类,一类是function phase，如build_phase、connect_phase等，这些phase都不耗费仿真时间，通过函数来实现；另外一类是task phase，如run_phase等，它们耗费仿真时间，通过任务来实现。灰色背景所示的是task phase，其他为function phase。
+
+
+
+
+值得注意的是，task phase中，run_phase和pre_reset_phase等12个小的phase并行运行。后者称为动态运行的phase。分成小的phase是为了实现更加精细化的控制。reset、configure、main、shutdown四个phase是核心，这四个phase通常模拟DUT的正常工作方式，在reset_phase对DUT进行复位、初始化等操作，在configure_phase则进行DUT的配置，DUT的运行主要在main_phase完成，shutdown_phase则是做一些与DUT断电相关的操作。
+1.2 代码执行顺序对于UVM树来说，共有三种顺序可以选择，一是自上而下，二是自下而上，三是随机序。最后一种方式是不受人控制的，在编程当中，这种不受控制的代码越少越好。因此可以选择的无非就是自上而下或者自下而上。除了build_phase之外，所有不耗费仿真时间的phase(即function phase)都是自下而上执行的。对于同一层次的、具有兄弟关系的component，其执行顺序是按照字典序的。
+1.3 super.phase的内容对于build_phase来说，uvm_component对其做的最重要的事情就是自动获取通过config_db::set设置的参数。除build_phase外,在写其他phase时,完全可以不必加上super.xxxx_phase语句。
+1.4 phase的跳转phase的跳转是比较高级的功能，假如在验证平台中监测到reset_n信号为低电平,则马上从main_phase跳转到reset_phase。driver的代码如下:
+task my_driver::reset_phase(uvm_phase phase);   phase.raise_objection(this);    `uvm_info(&quot;driver&quot;, &quot;reset phase&quot;, UVM_LOW)   vif.data &lt;= 8&#x27;b0;   vif.valid &lt;= 1&#x27;b0;   while(!vif.rst_n)      @(posedge vif.clk);   phase.drop_objection(this); endtasktask my_driver::main_phase(uvm_phase phase);   `uvm_info(&quot;driver&quot;, &quot;main phase&quot;, UVM_LOW)   fork      while(1) begin         seq_item_port.get_next_item(req);         drive_one_pkt(req);         seq_item_port.item_done();      end      begin         @(negedge vif.rst_n);         phase.jump(uvm_reset_phase::get());      end   joinendtask
+reset_phase主要做一些清理工作,并等待复位完成。main_phase中一旦监测到reset_n为低电平,则马上跳转到reset_phase。
+二、objection机制objection字面的意思就是反对、异议。在验证平台中，可以通过drop_objection来通知系统可以关闭验证平台。当然，在撤销之前首先要raise_objection如果UVM发现此phase没有提起任何objection,那么将会直接跳转到下一个phase中。一般来说,在一个实际的验证平台中,通常会在以下两种objection的控制策略中选择一种:  
+2.1 在scoreboard中进行控制如果要在scoreboard中控制objection，则需要通过config_db::set的方式设置收集到的transaction的数量pkt_num，当收集到足够数量的transaction后跳出循环：
+task my_scoreboard::main_phase(uvm_phase phase); 	phase.raise_objection(this); 	fork 		while (1) begin 			exp_port.get(get_expect); 			expect_queue.push_back(get_expect); 		end 		for(int i = 0; i &lt; pkt_num; i++) begin 			act_port.get(get_actual); 			...  		end	join_any 	phase.drop_objection(this); endtask
+上述代码中将原本的fork…join语句改为了fork…join_any。当收集到足够的transaction后，第二个进程终结，从而跳出fork…join_any，执行drop_objection语句。
+2.1 在sequence中进行控制当sequence完成后,再撤销此objection。这里就是之前章节的例子：
+task my_case0::main_phase(uvm_phase phase);   phase.raise_objection(this);   `uvm_info(&quot;case0&quot;, &quot;main_phase&quot;, UVM_LOW)   #10000;   phase.drop_objection(this);endtask
+以上两种方式在验证平台中都有应用。其中用得最多的是第二种,这种方式是UVM提倡的方式。UVM的设计哲学就是全部  由sequence来控制激励的生成,因此一般情况下只在sequence中控制objection。但是有一个问题就是：在sequence中，n时刻发送完毕最后一个transaction，如果此时立刻drop_objection，那么最后在n+p时刻DUT输出的包将无法接收到。因此,在sequence中，最后一个包发送完毕后，要延时p时间才能drop_objection，对应的图如下所示：
+
+
+
+
+virtual task body(); 	if(starting_phase != null) 		starting_phase.raise_objection(this); 	repeat (10) begin 		`uvm_do(m_trans) 	end 	#100; 	if(starting_phase != null) 		starting_phase.drop_objection(this); endtask
+还有一种方法就是在最顶层运行下面的代码：
+phase.phase_done.set_drain_time(this, 200);
+这样在你撤销drop_objection后还会等待一段时间，提高了灵活性。
+二、domain机制在默认情况下，验证平台中所有component都位于一个名字为common_domain的domain中，假设有两个driver，那么两者在每一个phase的运行都是同步的。若要体现出独立性,那么两个部分的reset_phase、configure_phae、main_phase等就不应该同步。此时就应该让其中的一部分从common_domain中独立出来，使其位于不同的domain中。下面是两个在不同的domain的情况：
+
+
+
+
+domain把两块时钟域隔开，之后两个时钟域内的各个动态运行(run_time)的phase就可以不必同步。注意，这里domain只能隔离run-time的phase，对于其他phase，其实还是同步的。若将某个component置于某个新的domain中，可以使用如下的方式：
+class B extends uvm_component;   uvm_domain new_domain;   `uvm_component_utils(B)   function new(string name, uvm_component parent);      super.new(name, parent);      new_domain = new(&quot;new_domain&quot;);   endfunction   virtual function void connect_phase(uvm_phase phase);      set_domain(new_domain);   endfunction   extern virtual  task reset_phase(uvm_phase phase);   extern virtual  task post_reset_phase(uvm_phase phase);   extern virtual  task main_phase(uvm_phase phase);   extern virtual  task post_main_phase(uvm_phase phase);endclass
+这样B就是单独一个domain了，然后再运行的话会发现两者的运行时间发生了错位。刚才的A和B分别位于不同的domain中,在此种情况下,phase的跳转将只局限于某一个domain中。
+class B extends uvm_component;   uvm_domain new_domain;   bit has_jumped;   `uvm_component_utils(B)   function new(string name, uvm_component parent);      super.new(name, parent);      new_domain = new(&quot;new_domain&quot;);      has_jumped = 0;   endfunction   virtual function void connect_phase(uvm_phase phase);      set_domain(new_domain);   endfunction   extern virtual  task reset_phase(uvm_phase phase);   extern virtual  task main_phase(uvm_phase phase);endclasstask B::reset_phase(uvm_phase phase);   phase.raise_objection(this);   `uvm_info(&quot;B&quot;, &quot;enter into reset phase&quot;, UVM_LOW)   #100;   phase.drop_objection(this);endtasktask B::main_phase(uvm_phase phase);   phase.raise_objection(this);   `uvm_info(&quot;B&quot;, &quot;enter into main phase&quot;, UVM_LOW)   #500;   if(!has_jumped) begin      phase.jump(uvm_reset_phase::get());      has_jumped = 1&#x27;b1;   end   phase.drop_objection(this);endtask
+运行的结果是B两次进入了reset_phase和main_phase，而A只进入了一次。domain的应用使得phase的跳转可以只局限于验证平台的一部分。
+总结在这一章主要讲述了在UVM中每一个phase的运算顺序，有的是一瞬间运行，一个是需要消耗仿真时间，同时还在跳转、独立性等方面进行了讨论，能够帮助读者更加灵活的进行代码的编写。
+]]></content>
+      <categories>
+        <category>UVM学习笔记</category>
+      </categories>
+      <tags>
+        <tag>UVM</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>uvm_afifo_1</title>
+    <url>/2025/04/24/d18911f2be8e/</url>
+    <content><![CDATA[
+
+
+
+
+
+本文章同步到我的个人博客网站：希望大家能使用此网站来进行浏览效果更佳！！！
+
+
+一、异步FIFO1.1 异步FIFO的定义异步时序设计指的是在设计中有两个或以上的时钟， 且时钟之间是同频不同相或不同频率的关系。而异步时序设计的关键就是把数据或控制信号正确地进行跨时钟域传输。一个异步 FIFO 一般由如下部分组成：
+
+Memory, 作为数据的存储器；
+写逻辑部分，主要负责产生写信号和地址；
+读逻辑部分，主要负责产生读信号和地址；
+地址比较部分，主要负责产生 FIFO 空、满的标志。
+
+跟普通的FIFO相比，异步FIFO实际上多了读写地址的跨时钟域同步的逻辑，以及两个时钟域中读写信号的比较逻辑。
+1.2 亚稳态每一个触发器都有其规定的建立(setup)和保持(hold)时间参数, 在这个时间参数内， 输入信号在时钟的上升沿是不允许发生变的。 如果在信号的建立时间中对其进行采样， 得到的结果将是不可预知的，即亚稳态。为了避免亚稳态。采用双锁存器可以改善这一问题：
+
+
+
+
+
+时钟域B两级同步的寄存器跟时钟域A的输出寄存器之间不能有组合逻辑。组合逻辑电路各个输入信号的不一致性以及组合逻辑内部路径的延时时间不一样，运算后的信号存在毛刺。
+
+
+
+
+
+1.3 异步FIFO关键技术一这里用到了一个很重要的概念“回卷”，通常判断读写的地址是否相同来判断空和满，这里使用回卷技术，在深度为8的fifo中多一位来代表回卷位，当fifo溢出之后，回卷位会被置1，当读时钟和写时钟的回卷位不同而其他位相同时，表示fifo已经满，因为写地址在溢出后的位置，而读时钟在溢出前。
+
+
+
+
+1.3 异步FIFO关键技术二将满和将空信号实际上表示更加保守的满和空信号。基本思路是，设定一个间隔值，当读写地址之间的间隔小于或等于该间隔就产生将空或将满信号。对于异步FIFO而言，由于同步过来的地址信号都是格雷码表示的，我们不能直接用格雷码去判断上述的这个间隔，所以需要先对接受到的格雷码进行解码变为二进制，再和当前时钟域下的另一个地址进行将满和将空的生成。
+1.4 FIFO逻辑图
+
+
+
+
+二、UVM结构该项目的UVM包括以下几个文件：fifo_if.svfifo_case0.svbase_test.svtop_tb.svfifo_driver.svfifo_model.svfifo_transaction.svfifo_in_monitor.svfifo_env.svfifo_scoreboard.svfifo_chk_rst.svfifo_in_sequencer.svfifo_in_agent.svmy_env.svfifo_out_monitor.svfifo_out_agent.sv下面是本次UVM的整体框架：
+
+
+
+
+现在对每一个文件进行解释。
+2.1 interface该文件主要是用于连接DUT的物理信号与UVM的事件信号，起主要是在top_tb中进行定义和连接，然后通过uvm_config_db进行定点发送。
+`ifndef FIFO_IF__SV`define FIFO_IF__SV// 括号里面是时钟信号interface fifo_if(input wclk, input rclk, input wreset_b, input rreset_b);    logic write,read;	logic [31 : 0] wdata;	logic [31 : 0] rdata;    wire  wfull,rempty; // logic    /***********时钟约束************/    // wdata为inout    clocking ckw @(posedge wclk);		input  wfull;		inout  write;		inout  wdata;	endclocking    // wdata为input    clocking ckim @(posedge wclk);		input wfull;              		inout  write;             		input  wdata;	endclocking    //     clocking ckom @(posedge rclk);		input  rempty;		inout  read;		input  rdata;	endclocking    /***********方向约束************/    // 普通模式    modport DUT(		input write,		input read,		input wdata,		output rdata,		output wfull,		output rempty	);    // 读取模式    modport DRV(		clocking ckw,		input read,		input rdata,		input rempty	);        modport OMON(		clocking ckom,		input wfull,		input write,		input wdata	);endinterface //interfacename`endif
+clocking主要是定义每个logic信号的方向，同时制定该信号同步的时钟域。括号里信号的作用是控制 clocking 块内的所有信号的同步时序。时钟信号 的上升沿会触发对这些信号的采样或更新。modport的作用是定义了一个接口的访问模式，指定了如何访问时钟块 ckw 和接口中的信号。具体来说，它允许从外部访问 read、rdata 和 rempty 信号，并且会在时钟块 ckw 中进行同步。
+2.2 transactiontransaction主要是用于对信号进行打包操作，本项目只有一个输入data_in，因此只需要生成一个随机数据。同时基于约束并注册（这是基本操作）。
+`ifndef FIFO_TRANSACTION__SV`define FIFO_TRANSACTION__SVclass fifo_transaction extends uvm_sequence_item;    // 产生的随机数据    rand bit[31:0] data_in[];        // 约束	constraint data_in_c &#123;		soft data_in.size inside &#123;[1:300]&#125;;	&#125;    // 将数据加入注册	`uvm_object_utils_begin(fifo_transaction)		`uvm_field_array_int(data_in,UVM_ALL_ON)	`uvm_object_utils_end        // 构造函数	function new(string name = &quot;fifo_transaction&quot;);		super.new(name);	endfunctionendclass`endif
+2.3 driver驱动器是UVM中的核心，代码如下所示：
+`ifndef FIFO_DRIVER__SV`define FIFO_DRIVER__SVclass fifo_driver extends uvm_driver#(fifo_transaction);    virtual fifo_if vif;    //define 功能覆盖率 是否达到 空 满 状态		covergroup cov_label;			option.per_instance = 1;			option.auto_bin_max = 2;			coverpoint vif.wfull;			coverpoint vif.rempty;		endgroup    // 注册    `uvm_component_utils(fifo_driver)    // 构造函数    function new(string name = &quot;fifo_driver&quot;, uvm_component parent = null);       super.new(name, parent);       cov_label = new(); // 创建覆盖率    endfunction    // 初始化函数    virtual function void build_phase(uvm_phase phase);		super.build_phase(phase);		if(!uvm_config_db#(virtual fifo_if)::get(this,&quot;&quot;,&quot;vif&quot;,vif))			`uvm_fatal(&quot;fifo_driver&quot;,&quot;virtual interface must be set for vif!!!&quot;)	endfunction    extern task main_phase(uvm_phase phase);    extern task drive_one_pkt(fifo_transaction tr);endclasstask fifo_driver::main_phase(uvm_phase phase);	`uvm_info(&quot;fifo_driver&quot;,&quot;begin!&quot;,UVM_LOW)	while(1) begin		seq_item_port.get_next_item(req); // 开始		drive_one_pkt(req);		seq_item_port.item_done(); // 结束	endendtasktask fifo_driver::drive_one_pkt(fifo_transaction tr);	int data_size,j;	data_size = tr.data_in.size();	`uvm_info(&quot;fifo_driver&quot;,&quot;begin to drive one pkt&quot;,UVM_LOW)	for(int i = 0; i &lt; data_size; i++) begin		@(vif.ckw); // 表示ckw中的内容发生变化		if((!vif.ckw.wfull) &amp;&amp; (vif.ckw.write == 1)) begin 			cov_label.sample(); 			vif.ckw.wdata &lt;= tr.data_in[i];			`uvm_info(&quot;fifo_driver&quot;,$sformatf(&quot;%0d number is sent,number is %0h&quot;,j++,vif.ckw.wdata),UVM_LOW) 		end  		else if((!vif.ckw.wfull) &amp;&amp; (vif.ckw.write == 0)) begin			vif.ckw.write &lt;= 1;			i--;		end 		else begin // 满了			vif.ckw.write &lt;= 0;			i--;		end	end  endtask`endif
+关于覆盖率这里我们先不做介绍，后续会单独做期来讲解覆盖率
+需要注意几点，首先在初始化函数中使用uvm_config_db来获取DUT信号，用于对DUT的信号进行写入与读取。其次是在main_phase中，使用driver自带的端口seq_item_port来获得一个包（就是刚才说的随机数据），这个端口会在agent中进行连接，来源就是sequencer，然后将包中的信息发送到DUT上。最后就是在drive_one_pkt中，使用@(vif.ckw);来捕获时钟上升沿，然后通过wfull和write的状态来决定是否发送数据。
+
+可以看到，write和wdata信号均有写入和读取的操作，因此在ckw中设置为inout信号
+
+2.3 monitermoniter的作用在于接受DUT的信息，有在输入和输出都有一个moniter。
+`ifndef FIFO_IN_MONITOR__SV`define FIFO_IN_MONITOR__SVclass fifo_in_monitor extends uvm_monitor;   virtual fifo_if vif;   uvm_analysis_port #(fifo_transaction)  ap;   // 注册   `uvm_component_utils(fifo_in_monitor)   // 构造函数   function new(string name = &quot;fifo_in_monitor&quot;, uvm_component parent = null);      super.new(name, parent);   endfunction   // 初始化函数   virtual function void build_phase(uvm_phase phase);      super.build_phase(phase);      if(!uvm_config_db#(virtual fifo_if)::get(this, &quot;&quot;, &quot;vif&quot;, vif))         `uvm_fatal(&quot;fifo_in_monitor&quot;, &quot;virtual interface must be set for vif!!!&quot;)      ap = new(&quot;ap&quot;, this);   endfunction   extern virtual task main_phase(uvm_phase phase);   extern task collect_one_pkt(fifo_transaction tr);endclasstask fifo_in_monitor::main_phase(uvm_phase phase);	fifo_transaction tr;	repeat(2) begin		tr = new(&quot;tr&quot;);		#4.001;		collect_one_pkt(tr);		ap.write(tr);	endendtasktask fifo_in_monitor::collect_one_pkt(fifo_transaction tr);	int j,k;	`uvm_info(&quot;in_monitor&quot;,&quot;begin to collect one pkt&quot;,UVM_LOW) 	while(1) begin 		@(vif.ckim);  		if((!vif.ckim.wfull) &amp;&amp; (vif.ckim.write == 1)) begin // 符合要求			tr.data_in[j] = vif.ckim.wdata;			`uvm_info(&quot;in_monitor&quot;,$sformatf(&quot;%0d number is received,number is %0h&quot;,k++,vif.ckim.wdata),UVM_LOW)			if(j == 199)  break;   //seq1 发送200个数据 			j++;		end 	end	`uvm_info(&quot;in_monitor&quot;,&quot;end collect one pkt&quot;,UVM_LOW)	//tr.print();endtask`endif
+与driver一样，也要使用uvm_config_db来获取DUT信号。但是这里定义了一个uvm_analysis_port端口其作用就是把接收到的数据transcation发送出。这里的#4.001大概率是为了等待刚刚发送的数据发送，这里挖一个坑。后面的collect_one_pkt与前面相同，当符合要求后将wdata读到data_in中，但是这里使用的是ckim，原因如上所示。输出的out_moniter与输入有两个区别，一个是没有#4.001，第二个就是使用的读时钟块ckom以及传输的是rdata。
+2.4 sequencersequencer相当于sequence的下手，用于帮sequence传递数据的。
+`ifndef FIFO_SEQUENCER__SV`define FIFO_SEQUENCER__SVclass fifo_sequencer extends uvm_sequencer #(fifo_transaction);   `uvm_component_utils(fifo_sequencer)	function new(string name = &quot;fifo_sequencer&quot;,uvm_component parent = null);		super.new(name,parent);	endfunction		task main_phase(uvm_phase phase);		`uvm_info(&quot;fifo_sequencer&quot;,&quot;main_phase begin&quot;,UVM_LOW)	endtaskendclass`endif
+代码里没有要讲的，仅仅就定义了一下自己。
+2.5 agentagent的作用仅仅就是将三巨头sequencer、driver和monitor进行连接。
+`ifndef FIFO_IN_AGENT__SV`define FIFO_IN_AGENT__SVclass fifo_in_agent extends uvm_agent ;   // 三巨头   fifo_sequencer       sqr;   fifo_driver          drv;   fifo_in_monitor      mon;      uvm_analysis_port #(fifo_transaction)  ap; // 指向外面   `uvm_component_utils(fifo_in_agent)   function new(string name = &quot;fifo_in_agent&quot;, uvm_component parent);      super.new(name, parent);   endfunction       extern virtual function void build_phase(uvm_phase phase);   extern virtual function void connect_phase(uvm_phase phase);endclassfunction void fifo_in_agent::build_phase(uvm_phase phase);	super.build_phase(phase);	if(is_active == UVM_ACTIVE) begin		drv = fifo_driver::type_id::create(&quot;i_drv&quot;,this);		sqr = fifo_sequencer::type_id::create(&quot;i_sqr&quot;,this); 	end	mon = fifo_in_monitor::type_id::create(&quot;i_mon&quot;,this);endfunctionfunction void fifo_in_agent::connect_phase(uvm_phase phase);	super.connect_phase(phase);	if(is_active == UVM_ACTIVE) begin		drv.seq_item_port.connect(sqr.seq_item_export);	end	ap = mon.ap; // 调用mon的ap指针endfunction	`endif
+需要注意的是，这里和moniter一样定义了一个uvm_analysis_port 端口，并且在connect_phase中使用ap = mon.ap;的方式将mon的ap的指针指向了该ap，实现外部直接调用mon.ap。is_active 是agent的固有方法，用来区分输入和输出。但是本项目中还定义了一个out_agent，这个方法应该冗余了。在out_agent中的mon变为out_mon，其余不变。在connect_phase连接中将sqr的输出与drv的输入连接，等待sqr提供数据。
+2.6 modelmodel按理来说应该是一个参考，用来实现与DUT相同的操作，但这里仅仅定义了两个端口，从port端口到ap。
+`ifndef FIFO_MODEL__SV`define FIFO_MODEL__SVclass fifo_model extends uvm_component;      uvm_blocking_get_port #(fifo_transaction)  port;   uvm_analysis_port #(fifo_transaction)  ap;   extern function new(string name, uvm_component parent);   extern function void build_phase(uvm_phase phase);   extern virtual  task main_phase(uvm_phase phase);   `uvm_component_utils(fifo_model)endclass function fifo_model::new(string name, uvm_component parent);   super.new(name, parent);endfunction function void fifo_model::build_phase(uvm_phase phase);   super.build_phase(phase);   port = new(&quot;port&quot;, this);   ap = new(&quot;ap&quot;, this);endfunctiontask fifo_model::main_phase(uvm_phase phase);   fifo_transaction tr;   fifo_transaction new_tr;   super.main_phase(phase);   while(1) begin      port.get(tr);      new_tr = new(&quot;new_tr&quot;);      new_tr.copy(tr);      `uvm_info(&quot;fifo_model&quot;, &quot;get one transaction, copy and print it:&quot;, UVM_LOW)      new_tr.print();      ap.write(new_tr);   endendtask`endif
+2.7 scoreboardscoreboard用于收集来自agent以及model的数据。
+`ifndef FIFO_SCOREBOARD__SV`define FIFO_SCOREBOARD__SVclass fifo_scoreboard extends uvm_scoreboard;   fifo_transaction  expect_queue[$];   uvm_blocking_get_port #(fifo_transaction)  exp_port;   uvm_blocking_get_port #(fifo_transaction)  act_port;   `uvm_component_utils(fifo_scoreboard)   extern function new(string name, uvm_component parent = null);   extern virtual function void build_phase(uvm_phase phase);   extern virtual task main_phase(uvm_phase phase);endclass function fifo_scoreboard::new(string name, uvm_component parent = null);   super.new(name, parent);endfunction function void fifo_scoreboard::build_phase(uvm_phase phase);   super.build_phase(phase);   exp_port = new(&quot;exp_port&quot;, this);   act_port = new(&quot;act_port&quot;, this);endfunction task fifo_scoreboard::main_phase(uvm_phase phase);   fifo_transaction  get_expect,  get_actual, tmp_tran;   bit result;    super.main_phase(phase);   fork       while (1) begin         exp_port.get(get_expect);         expect_queue.push_back(get_expect);      end      while (1) begin         act_port.get(get_actual);         if(expect_queue.size() &gt; 0) begin            tmp_tran = expect_queue.pop_front();            result = get_actual.compare(tmp_tran);            if(result) begin                `uvm_info(&quot;fifo_scoreboard&quot;, &quot;Compare SUCCESSFULLY&quot;, UVM_LOW);            end            else begin               `uvm_error(&quot;fifo_scoreboard&quot;, &quot;Compare FAILED&quot;);               $display(&quot;the expect pkt is&quot;);               tmp_tran.print();               $display(&quot;the actual pkt is&quot;);               get_actual.print();            end         end         else begin            `uvm_error(&quot;fifo_scoreboard&quot;, &quot;Received from DUT, while Expect Queue is empty&quot;);            $display(&quot;the unexpected pkt is&quot;);            get_actual.print();         end       end   joinendtask`endif
+这里定义了两个接受端口，分别是exp_port以及act_port，其中exp_port来自fifo_model的输入，表示参考的数据。act_port来自o_agt，表示DUT的输出值。将这两个数值进行比较，从而判断程序是否发生错误。
+2.8 envenv是整个UVM最接近顶层的存在，其主要包括三个部分：agent、model以及scoreboard。
+`ifndef MY_ENV__SV`define MY_ENV__SVclass my_env extends uvm_env;   fifo_in_agent     i_agt;   fifo_out_agent    o_agt;   fifo_model        mdl;   fifo_scoreboard   scb;      uvm_tlm_analysis_fifo #(fifo_transaction) agt_scb_fifo;   uvm_tlm_analysis_fifo #(fifo_transaction) agt_mdl_fifo;   uvm_tlm_analysis_fifo #(fifo_transaction) mdl_scb_fifo;      function new(string name = &quot;my_env&quot;, uvm_component parent);      super.new(name, parent);   endfunction   virtual function void build_phase(uvm_phase phase);      super.build_phase(phase);      i_agt = fifo_in_agent::type_id::create(&quot;i_agt&quot;, this);      o_agt = fifo_out_agent::type_id::create(&quot;o_agt&quot;, this);      i_agt.is_active = UVM_ACTIVE;      o_agt.is_active = UVM_PASSIVE;      mdl = fifo_model::type_id::create(&quot;mdl&quot;, this);      scb = fifo_scoreboard::type_id::create(&quot;scb&quot;, this);      agt_scb_fifo = new(&quot;agt_scb_fifo&quot;, this);      agt_mdl_fifo = new(&quot;agt_mdl_fifo&quot;, this);      mdl_scb_fifo = new(&quot;mdl_scb_fifo&quot;, this);   endfunction   extern virtual function void connect_phase(uvm_phase phase);      `uvm_component_utils(my_env)endclassfunction void my_env::connect_phase(uvm_phase phase);   super.connect_phase(phase);   i_agt.ap.connect(agt_mdl_fifo.analysis_export);   mdl.port.connect(agt_mdl_fifo.blocking_get_export);   mdl.ap.connect(mdl_scb_fifo.analysis_export);   scb.exp_port.connect(mdl_scb_fifo.blocking_get_export);   o_agt.ap.connect(agt_scb_fifo.analysis_export);   scb.act_port.connect(agt_scb_fifo.blocking_get_export); endfunction`endif
+这里面共定义了三个fifo，用来构建三者之间数据的缓冲，具体传输方向如下所示：fifo_model -&gt; mdl_scb_fifo -&gt; fifo_scoreboardfifo_out_agent-&gt; agt_scb_fifo-&gt; fifo_scoreboardfifo_in_agent -&gt; agt_scb_fifo -&gt; fifo_model从这里看也看到，在fifo_model 中传递的数据，其实是来自于fifo_in_agent ，当然，最为fifo输入和输出的数据确实是相同的。
+2.9 base_testbase_test才是UVM真正的顶层，他的主要作用很简单，除了例化一个env之外，还可以进行项目错误的统计工作。
+`ifndef BASE_TEST__SV`define BASE_TEST__SVclass base_test extends uvm_test;   my_env         env;      function new(string name = &quot;base_test&quot;, uvm_component parent = null);      super.new(name,parent);   endfunction      extern virtual function void build_phase(uvm_phase phase);   extern virtual function void report_phase(uvm_phase phase);   `uvm_component_utils(base_test)endclassfunction void base_test::build_phase(uvm_phase phase);   super.build_phase(phase);   env  =  my_env::type_id::create(&quot;env&quot;, this);endfunctionfunction void base_test::report_phase(uvm_phase phase);   uvm_report_server server;   int err_num;   super.report_phase(phase);   server = get_report_server();   err_num = server.get_severity_count(UVM_ERROR);   if (err_num != 0) begin      $display(&quot;TEST CASE FAILED&quot;);   end   else begin      $display(&quot;TEST CASE PASSED&quot;);   endendfunction`endif
+在report_phase中定义了一个uvm_report_server 用于检测错误，根据错误的数目输出验证通过与否。
+2.10 case_sequence这个相当于独立于整个UVM树之外的一个部分，用于产生激励信号。
+`ifndef FIFO_CASE0__SV`define FIFO_CASE0__SVclass case0_sequence extends uvm_sequence #(fifo_transaction);	fifo_transaction trans;	`uvm_object_utils(case0_sequence)	function new(string name = &quot;case0_sequence&quot;);		super.new(name);	endfunction	virtual task body();		repeat(2) begin			`uvm_info(&quot;case0_sequence&quot;,&quot;generate one transaction!&quot;,UVM_LOW)			`uvm_do_with(trans,&#123;trans.data_in.size == 200;&#125;)		end	endtaskendclassclass test_case0 extends base_test;	`uvm_component_utils(test_case0)	function new(string name = &quot;test_case0&quot;, uvm_component parent = null);		super.new(name,parent);	endfunction	function void build_phase(uvm_phase phase);		super.build_phase(phase);	endfunction		task main_phase(uvm_phase phase);		case0_sequence seq;		phase.raise_objection(this);		#4;  		seq = case0_sequence::type_id::create(&quot;l_seq&quot;);		`uvm_info(&quot;case0_sequence&quot;,&quot;case1_sequence begin&quot;,UVM_LOW)		seq.start(env.i_agt.sqr);		#3000;		phase.drop_objection(this);	endtaskendclass`endif
+在这里，使用uvm_do_with宏的方法实现将特定的数据传输到sequencer。但这里值得注意的是，在下面定义了一个从属于base_test的类test_case0 ，其也是UVM树的一部分，是从属于base_test的，因此与env的关系很近，但是这里其作用仅仅就是建立一个case0_sequence 并且运行，同时还是用phase.raise_objection(this)与phase.drop_objection(this)定义整个sequence事件的开始与结束。在这里指定了env.i_agt.sqr为发射的地点。
+2.11 top_tb这就是最终的tb文件，代码如下，具体就不说了，无非就是例化初始化之类的操作，以及保存波形。
+
+这里挖一个坑，针对这里asyn_fifo_chk_rst还没了解清楚。
+
+`timescale 1ns/1ps`include &quot;uvm_macros.svh&quot;import asyn_fifo_chk_rst::*;import uvm_pkg::*;module top_tb();logic wclk,rclk,wreset_b,rreset_b;fifo_if my_if(wclk,rclk,wreset_b,rreset_b);fifo_top DUT(	.wclk		   (wclk),	.rclk		   (rclk),	.wreset_b	(wreset_b),     //wrst_n -&gt; wreset_b	.rreset_b	(rreset_b),	    //rrst_n -&gt; rreset_b	.write		(my_if.write),	//winc -&gt; write	.read		   (my_if.read),	//rinc -&gt; read	.wdata		(my_if.wdata),	.wfull		(my_if.wfull),	.rempty		(my_if.rempty),	.rdata		(my_if.rdata));fifo_rst_mon fifo_rst_mon1;fifo_chk_rst fifo_chk_rst1;event reset_e_w;event reset_e_r;initial begin	wclk = 0;	rclk = 0;	wreset_b = 1;	rreset_b = 1;	#2    wreset_b = 0;	rreset_b = 0;	my_if.write = 0;	my_if.read = 0;	#2    wreset_b = 1;	rreset_b = 1;end	always #1 wclk = ~wclk;always #3 rclk = ~rclk;// 参数传递initial begin	uvm_config_db#(virtual fifo_if)::set(null,&quot;uvm_test_top.env.i_agt.i_drv&quot;,&quot;vif&quot;,my_if);	uvm_config_db#(virtual fifo_if)::set(null,&quot;uvm_test_top.env.i_agt.i_mon&quot;,&quot;vif&quot;,my_if);	uvm_config_db#(virtual fifo_if)::set(null,&quot;uvm_test_top.env.o_agt.o_mon&quot;,&quot;vif&quot;,my_if);end// 参考？initial begin	fifo_rst_mon1 = new(reset_e_w,reset_e_r);	fifo_chk_rst1 = new(reset_e_w,reset_e_r);	fifo_rst_mon1.my_if6 = my_if;	fifo_chk_rst1.my_if7 = my_if;	fork		fifo_rst_mon1.run();		fifo_chk_rst1.run();	joinendinitial begin	$fsdbDumpfile(&quot;tb.fsdb&quot;);	$fsdbDumpvars;	$fsdbDumpon;endinitial begin   run_test(&quot;test_case0&quot;);endendmodule
+三、UVM仿真环境的搭建这里我简单说一下，因为在环境搭建的过程中踩了很多坑，在网上的教程很乱，也没有一个完美的答案，这里就介绍一下我搭建UVM的结构图：
+
+
+
+
+可以看出，我这里建立了三个文件夹，有源码DUT部分，存放仿真文件以及启动文件的sim还有存放tb文件和uvm文件的testbench文件。最重要的就是启动文件filelist和Makefile的编写。
+3.1 Makefile文件的编写先给出我的Makefile文件：
+.PHONY:file vcs sim verdi cleanVCS = vcs -full64 -cpp g++-4.8 -cc gcc-4.8 \	-LDFLAGS -Wl,--no-as-needed \	-f filelist.f \	-timescale=1ns/1ps \	-R \	-debug_acc+all \	+define+FSDB \	-lca -kdb \	-ntb_opts uvm-1.1 \	-sverilog \	+v2k \	|tee vcs.log	file:	find ../ -name &quot;*.v&quot; -o -name &quot;*.sv&quot; &gt; file.f	vcs:	$&#123;VCS&#125;sim:	./simv -gui |tee sim.log &amp;verdi:	verdi -f filelist.f -sv -ssf tb.fsdb &amp;clean:	rm -rf csrc verdiLog simv.daidir \	novas.* \	vc_hdrs.h \	simv \	*.key \	*.fsdb \	*.log \	inter.vpd \	DVEfiles
+这里包括了五个部分，分别是file、vcs、sim、verdi以及clean。我分开来介绍：
+
+file：这个主要是用于生成filelist文件，但也不全是filelist，因为该脚本只能获取所有的.v和.sv文件，在filelist中的编写不仅仅要包含这个，而且还有uvm包的文件，并且这些文件的先后顺序有严格的要求，这个后面讲解。
+vcs：这个主要是启动vcs对所有的文件进行编译，在Makefile中添加了很多附加选项，这些选项都是能够让vcs正常运行的选项，你可以使用vcs help来获取vcs命令手册，里面解释了所有符号的意义以及用法。
+
+# 指定使用 VCS (Verilog Compiler Simulator) 进行仿真编译VCS = vcs -full64 -cpp g++-4.8 -cc gcc-4.8 \	# -full64: 使用 64 位编译选项，适用于 64 位操作系统	# -cpp g++-4.8: 指定 C++ 编译器使用 g++ 版本 4.8	# -cc gcc-4.8: 指定 C 编译器使用 gcc 版本 4.8	-LDFLAGS -Wl,--no-as-needed \	# -LDFLAGS: 启用链接器的标志	# -Wl,--no-as-needed: 在链接时告诉链接器不要自动移除未使用的库	-f filelist.f \	# -f filelist.f: 指定仿真源文件列表，filelist.f 是一个包含所有待编译文件的文件列表	-timescale=1ns/1ps \	# -timescale=1ns/1ps: 设置仿真时间尺度为 1ns（纳秒）/ 1ps（皮秒）	-R \	# -R: 启用调试和恢复功能	-debug_acc+all \	# -debug_acc+all: 启用所有的调试访问器，允许调试仿真时查看所有信号和变量	+define+FSDB \	# +define+FSDB: 定义一个名为 FSDB 的宏，通常用于控制 FSDB 文件（仿真波形文件）的输出	-lca -kdb \	# -lca: 启用 LCA (Library Coverage Analysis)，用于库覆盖分析	# -kdb: 启用 KDB (Kernel Debugger)，为调试目的启用内核调试功能	-ntb_opts uvm-1.1 \	# -ntb_opts uvm-1.1: 启用与 UVM 1.1 兼容的 NTB（Native Testbench）选项，适用于 UVM（Universal Verification Methodology）验证环境	-sverilog \	# -sverilog: 启用 SystemVerilog 编译支持	+v2k \	# +v2k: 启用 Verilog-2001（V2K）编译选项	|tee vcs.log	# |tee vcs.log: 使用 tee 命令将 VCS 编译过程的输出同时显示在终端并保存到 vcs.log 文件中
+
+
+sim：用来使用vcs自带的仿真工具生成波形，这里我没用过。
+verdi：用来查看fsdb的波形文件，这个是我最常用的，通过这个可以很方便的对波形进行追溯，调试起来很容易。
+clean：用来删除生成了的文件。
+
+以防有人不会用Makefile，说一下他的用法。在Makefile文件所在的目录打开终端，使用make [指令]的方式来运行，Makefile本质来说就是将指令进行了一个打包，我这里运行verdi -f filelist.f -sv -ssf tb.fsdb &amp;和make verdi的效果是一样的。
+3.2 filelist文件的编写下面是我针对本项目编写的filelist文件。
++incdir+$UVM_HOME/src$UVM_HOME/src/uvm_pkg.sv../testbench/fifo_if.sv../testbench/fifo_transaction.sv../testbench/fifo_driver.sv../testbench/fifo_in_sequencer.sv../testbench/fifo_in_monitor.sv../testbench/fifo_out_monitor.sv../testbench/fifo_in_agent.sv../testbench/fifo_out_agent.sv../testbench/fifo_model.sv../testbench/fifo_scoreboard.sv../testbench/my_env.sv../testbench/fifo_chk_rst.sv../testbench/base_test.sv../testbench/fifo_case0.sv../testbench/top_tb.sv../DUT/pointer.v../DUT/sync.v../DUT/fifo_top.v../DUT/memory.v../DUT/comparator.v
+可以分为三个部分，首先是前两行的+incdir+$UVM_HOME/src和$UVM_HOME/src/uvm_pkg.sv，第一句话表示将$UVM_HOME/src中的所有文件加入到编译列表中，这个文件里基本上是所有uvm库所需要的文件，什么uvm_env呀之类的就是这里定义。然后uvm_pkg.sv相当于是所有文件的核心实现，在tob_tb中，只需要调用import uvm_pkg::*;便可以将所有uvm包含进来。
+
+$UVM_HOME表示的是一个宏定义，在Lunix中主目录的.bashrc中定义，我这里的原话是export UVM_HOME=/home/wxm/uvm_study/uvm-1.1d后面紧接着是testbench中的文件，注意一定要先写testbench再写dut，以防报错。然后在testbench内部也要按照顺序，从独立到树枝再到树根的顺序，比如献血interface和transaction，再从树枝的dirver开始写到树根base_case。因为在UVM编译的过程中是从上到下的顺序，如果你先编译base_case，编译器会报错说找不到env。最后就是top_tb以及其余的DUT文件。但是貌似DUT文件没有内部顺序
+
+3.3 另辟蹊径还有一个别的方法，你只需要写两个文件就可以：一个是top_tb.sv;另一个是fifo_top.v，前提是你需要在这两个文件里面把其余所有的文件include一遍，就像这样：
+`include &quot;../testbench/my_driver.sv&quot;`include &quot;../testbench/my_model.sv&quot;...
+因为你的Makefile和filelist以及终端运行的位置都在sim文件夹，而其他文件在testbench和dut文件夹，因此你在include的时候需要以sim文件夹为根目录，使用../回到上一级，再使用/testbench/XXX.sv来调用这些文件。这样操作就不需要在filelist中调整顺序了。
+
+总结总而言之，这是一个很好的练习UVM的项目，因为其与《UVM实战》这本书的内容大差不差，很多在结构上都有相似的地方，我希望从这个项目为起点，依次加深我对IC验证这一领域的认识。后面我会对该项目的波形图进行研究，并通过调整UVM代码实现一些不一样的功能。
+]]></content>
+      <categories>
+        <category>UVM学习笔记</category>
+      </categories>
+      <tags>
+        <tag>UVM 简单ic模块</tag>
       </tags>
   </entry>
 </search>
