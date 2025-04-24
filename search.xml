@@ -423,15 +423,11 @@ class B extends uvm_component;   uvm_domain new_domain;   bit has_jumped;   `uvm
       </tags>
   </entry>
   <entry>
-    <title>uvm_afifo_1</title>
+    <title>【UVM项目实战】异步fifo—uvm项目结构以及uvm环境搭建</title>
     <url>/2025/04/24/d18911f2be8e/</url>
     <content><![CDATA[
 
 
-
-
-
-本文章同步到我的个人博客网站：希望大家能使用此网站来进行浏览效果更佳！！！
 
 
 一、异步FIFO1.1 异步FIFO的定义异步时序设计指的是在设计中有两个或以上的时钟， 且时钟之间是同频不同相或不同频率的关系。而异步时序设计的关键就是把数据或控制信号正确地进行跨时钟域传输。一个异步 FIFO 一般由如下部分组成：
