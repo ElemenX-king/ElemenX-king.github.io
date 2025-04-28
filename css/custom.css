@@ -51,13 +51,12 @@
     left: -125px;
   }
 
-/* 限制文章标题显示的最大宽度 */
-.header .site-title {
-  white-space: nowrap;      /* 防止标题换行 */
-  overflow: hidden;         /* 超出部分隐藏 */
-  text-overflow: ellipsis;  /* 以省略号显示超出部分 */
-  max-width: 30%;           /* 设置最大宽度（根据需要调整） */
-}
+  #nav .menus_items .site-title {
+    max-width: 30%;           /* 设置最大宽度 */
+    white-space: nowrap;      /* 防止换行 */
+    overflow: hidden;         /* 超出部分隐藏 */
+    text-overflow: ellipsis;  /* 使用省略号表示超出的部分 */
+  }
 
 /************************黑夜霓虹灯***********************/
   /* 夜间模式菜单栏发光字 */
