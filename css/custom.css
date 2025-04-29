@@ -299,7 +299,7 @@ div#archive {
 }
 
 /***********************哔哩哔哩视频适配**************************/
-/* .aspect-ratio {
+.aspect-ratio {
   position: relative;
   width: 90%;
   height: auto;
@@ -313,7 +313,7 @@ div#archive {
   height: 86%;
   left: 0;
   top: 0;
-} */
+}
 
 /* 
 直接复制插入你的 md 文章就行，修改里面的 aid 为你视频的 AV号
